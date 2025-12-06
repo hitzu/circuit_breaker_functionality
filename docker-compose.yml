@@ -1,0 +1,73 @@
+services:
+  # PostgreSQL Database for Development
+  postgres-dev:
+    image: postgres:17-alpine
+    container_name: bookandsign-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bookandsign_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    networks:
+      - bookandsign-network
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d bookandsign_dev']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL Database for Testing
+  postgres-test:
+    image: postgres:17-alpine
+    container_name: bookandsign-postgres-test
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bookandsign_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - '5433:5432'
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    networks:
+      - bookandsign-network
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d bookandsign_test']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: bookandsign-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    networks:
+      - bookandsign-network
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_dev_data:
+    driver: local
+  postgres_test_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  bookandsign-network:
+    driver: bridge

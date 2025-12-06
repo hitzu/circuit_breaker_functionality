@@ -1,0 +1,157 @@
+# .github/workflows/pipeline-main.yml
+name: pipeline-main
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: pipeline-main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NODE_VERSION: 22
+      PNPM_VERSION: 9
+      # Database configuration for tests
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: bookandsign_test
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: bookandsign_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node (+ pnpm cache)
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Run unit tests
+        env:
+          NODE_ENV: test
+          DB_HOST: ${{ env.DB_HOST }}
+          DB_PORT: ${{ env.DB_PORT }}
+          DB_USERNAME: ${{ env.DB_USERNAME }}
+          DB_PASSWORD: ${{ env.DB_PASSWORD }}
+          DB_NAME: ${{ env.DB_NAME }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+        run: pnpm run test
+
+  migrate:
+    name: migrate
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 20
+    env:
+      NODE_VERSION: 22
+      PNPM_VERSION: 9
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node (+ pnpm cache)
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Debug - Check SUPABASE_DB_URL
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "SUPABASE_DB_URL is EMPTY or NOT SET"
+            echo ""
+            echo "TROUBLESHOOTING:"
+            echo "1. Verify the secret 'SUPABASE_DB_URL' exists in the 'production' environment"
+            echo "2. Go to: Settings > Environments > production > Secrets and variables"
+            echo "3. Make sure 'SUPABASE_DB_URL' is added as a secret (not a variable)"
+            echo "4. If using repository secrets instead, remove 'environment: production' from the job"
+            exit 1
+          else
+            echo "SUPABASE_DB_URL is SET"
+          fi
+
+      - name: migrations:status (before)
+        env:
+          NODE_ENV: production
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: pnpm run db:status
+
+      - name: migrations:run
+        env:
+          NODE_ENV: production
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: pnpm run db:run
+
+      - name: migrations:status (after)
+        env:
+          NODE_ENV: production
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: pnpm run db:status
+
+  deploy:
+    name: deploy
+    needs: migrate
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - name: Trigger Render Deploy
+        run: |
+          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            || echo "Deploy webhook triggered"
