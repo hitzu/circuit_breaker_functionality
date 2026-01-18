@@ -1,10 +1,10 @@
-# Estructura de modelo de datos
+# Estructura del modelo de datos
 
 Este documento describe el modelo de datos lógico. Usamos un único esquema de Postgres y aislamos tenants mediante un `tenant_id` obligatorio en todas las tablas de negocio. El modelo está optimizado para calificaciones centralizadas por periodo, sincronizaciones trimestrales con el gobierno, eventos/perfiles de comportamiento y auditabilidad (RBAC + logs).
 
 Nota multi-tenant: todas las tablas de negocio están siempre scopeadas por `tenant_id`. En una evolución futura se puede incorporar RLS o aislamiento por esquema, pero está fuera de alcance de esta versión.
 
-Nota: El modelo es casi físico, pero no enumera todos los campos. Solo se incluyen los atribos más relevantes para ilustrar llaves, relaciones y decisiones de diseño; la implementación real añadiría más columnas según necesidad.
+Nota: el modelo es casi físico, pero no enumera todos los campos. Solo se incluyen los atributos más relevantes para ilustrar llaves, relaciones y decisiones de diseño; la implementación real añadiría más columnas según necesidad.
 
 
 ## Diagrama Entidad-Relación
@@ -32,7 +32,9 @@ erDiagram
   STUDENTS ||--o{ BEHAVIOR_PROFILES : has_current_profile
 ```
 
-## Definicion de Tablas
+<<<captura de pantalla del ERD (render de Mermaid)>>> 
+
+## Definición de tablas
 
 **Nota: Convención de columnas comunes:**  
 Todas las tablas de negocio incluyen, por defecto, las siguientes columnas estandarizadas para mantener consistencia, trazabilidad y facilitar borrado lógico:
@@ -40,9 +42,9 @@ Todas las tablas de negocio incluyen, por defecto, las siguientes columnas estan
 - `id` (`uuid`, primary key): Identificador único de la fila.
 - `created_at` (`timestamptz`, not null, default now()): Fecha y hora de creación del registro.
 - `updated_at` (`timestamptz`, not null, default now()): Fecha y hora de última actualización.
-- `deleted_at` (`timestamptz`, nullable): Marca lógica de borrado (si es distinto de `null`, el registro se considera eliminado para queries normales, excelente para auditorias internas y externas).
+- `deleted_at` (`timestamptz`, nullable): Marca lógica de borrado (si es distinto de `null`, el registro se considera eliminado para consultas normales; excelente para auditorías internas y externas).
 
-### Constantes (overview)
+### Constantes (resumen)
 
 - `consolidated_grades`: UNIQUE (`tenant_id`, `student_id`, `subject_id`, `period_id`).
 - `evaluations`: UNIQUE (`tenant_id`, `student_id`, `subject_id`, `period_id`, `evaluation_type`).
@@ -54,6 +56,7 @@ Todas las tablas de negocio incluyen, por defecto, las siguientes columnas estan
 **Columnas**
 - `id` (uuid, PK) – identificador del tenant.
 - `name` (varchar(255), not null) – nombre de la escuela u organizacion.
+- `name` (varchar(255), not null) – nombre de la escuela u organización.
 - `status` (enum: ACTIVE, INACTIVE) – estado del tenant.
 
 ### users
@@ -61,15 +64,15 @@ Todas las tablas de negocio incluyen, por defecto, las siguientes columnas estan
 **Columnas**
 - `id` (uuid, PK) – identificador de usuario.
 - `tenant_id` (uuid, FK -> tenants.id, not null) – pertenencia al tenant.
-- `email` (varchar(320), not null) – identificador de login, unico por tenant.
+- `email` (varchar(320), not null) – identificador de login, único por tenant.
 - `full_name` (varchar(255), not null).
 - `role` (enum: ADMIN, TEACHER, VIEWER, not null).
 - `scopes` (jsonb, null) – permisos finos por usuario.
 - `status` (enum: ACTIVE, SUSPENDED, not null).
 - `last_login_at` (timestamptz, null).
 
-**Indices**
-- `ux_users_tenant_email` on (`tenant_id`, `email`) – login unico por tenant.
+**Índices**
+- `ux_users_tenant_email` on (`tenant_id`, `email`) – login único por tenant.
 - `ix_users_tenant_role` on (`tenant_id`, `role`) – listados RBAC.
 
 
@@ -78,43 +81,43 @@ Todas las tablas de negocio incluyen, por defecto, las siguientes columnas estan
 **Columnas**
 - `id` (uuid, PK) – identificador de estudiante.
 - `tenant_id` (uuid, FK -> tenants.id, not null).
-- `external_id` (varchar(64), not null) – identificador SEP o numero de matricula de su escuela.
+- `external_id` (varchar(64), not null) – identificador SEP o número de matrícula de su escuela.
 - `full_name` (varchar(255), not null).
 - `grade_level` (varchar(32), not null).
 - `status` (enum: ACTIVE, INACTIVE, not null).
 - `nickname` (varchar(255), null).
 
-**Indices**
-- `ux_students_tenant_external_id` on (`tenant_id`, `external_id`) – importacion y sync.
+**Índices**
+- `ux_students_tenant_external_id` on (`tenant_id`, `external_id`) – importación y sync.
 - `ix_students_tenant_grade_level` on (`tenant_id`, `grade_level`) – cohortes.
 
 **Notas**
-- PII minima; evitar campos sensibles en esta tabla.
+- PII mínima; evitar campos sensibles en esta tabla.
 
 ### subjects
 
 **Columnas**
 - `id` (uuid, PK) – identificador de asignatura.
 - `tenant_id` (uuid, FK -> tenants.id, not null).
-- `code` (varchar(32), not null) – codigo de asignatura.
+- `code` (varchar(32), not null) – código de asignatura.
 - `name` (varchar(255), not null).
 
-**Indices**
-- `ux_subjects_tenant_code` on (`tenant_id`, `code`) – codigo unico por tenant.
+**Índices**
+- `ux_subjects_tenant_code` on (`tenant_id`, `code`) – código único por tenant.
 
 **Notas**
-- El codigo se usa en importaciones y reportes.
+- El código se usa en importaciones y reportes.
 
 ### grading_rules
 
 **Columnas**
 - `id` (uuid, PK) – identificador de regla.
 - `tenant_id` (uuid, FK -> tenants.id, not null).
-- `period_id` (varchar(32), not null) – identificador de periodo o termino.
+- `period_id` (varchar(32), not null) – identificador de periodo o término.
 - `rules` (jsonb, not null) – reglas y ponderaciones.
 - `version` (int, not null, default 1).
 
-**Indices**
+**Índices**
 - `ix_grading_rules_tenant_period` on (`tenant_id`, `period_id`) – consulta por periodo.
 
 **Notas**
@@ -123,7 +126,7 @@ Todas las tablas de negocio incluyen, por defecto, las siguientes columnas estan
 ### evaluations
 
 **Columnas**
-- `id` (uuid, PK) – identificador de evaluacion.
+- `id` (uuid, PK) – identificador de evaluación.
 - `tenant_id` (uuid, FK -> tenants.id, not null).
 - `student_id` (uuid, FK -> students.id, not null).
 - `subject_id` (uuid, FK -> subjects.id, not null).
@@ -134,11 +137,11 @@ Todas las tablas de negocio incluyen, por defecto, las siguientes columnas estan
 - `max_score` (numeric(6,2), not null).
 - `evaluated_at` (timestamptz, not null).
 
-**Indices**
+**Índices**
 - `ix_evaluations_tenant_student_period_subject` on (`tenant_id`, `student_id`, `period_id`, `subject_id`) – lectura para calificaciones.
-- `ix_evaluations_tenant_subject_period` on (`tenant_id`, `subject_id`, `period_id`) – analitica por asignatura.
+- `ix_evaluations_tenant_subject_period` on (`tenant_id`, `subject_id`, `period_id`) – analítica por asignatura.
 
-**Constraints**
+**Restricciones**
 - `ux_evaluations_tenant_student_subject_period_type` UNIQUE (`tenant_id`, `student_id`, `subject_id`, `period_id`, `evaluation_type`) – evita duplicados por reprocesamiento.
 
 
@@ -154,10 +157,10 @@ Todas las tablas de negocio incluyen, por defecto, las siguientes columnas estan
 - `final_score` (numeric(6,2), not null).
 - `calculated_at` (timestamptz, not null).
 
-**Indices**
-- `ix_consolidated_grades_tenant_student_period` on (`tenant_id`, `student_id`, `period_id`) Precalculos para lecturas rapidas y snapshots.
+**Índices**
+- `ix_consolidated_grades_tenant_student_period` on (`tenant_id`, `student_id`, `period_id`) – precálculos para lecturas rápidas y snapshots.
 
-**Constraints**
+**Restricciones**
 - `ux_consolidated_grades_tenant_student_subject_period` UNIQUE (`tenant_id`, `student_id`, `subject_id`, `period_id`) – evita filas duplicadas de consolidación en reprocesos.
 
 ### behavior_events
@@ -167,12 +170,12 @@ Todas las tablas de negocio incluyen, por defecto, las siguientes columnas estan
 - `tenant_id` (uuid, FK -> tenants.id, not null).
 - `student_id` (uuid, FK -> students.id, not null).
 - `event_id` (varchar(128), not null) – idempotency key del evento canónico.
-- `event_type` (varchar(64), not null) – asistencia, participacion, etc.
+- `event_type` (varchar(64), not null) – asistencia, participación, etc.
 - `occurred_at` (timestamptz, not null).
 - `metadata` (jsonb, null) – payload del evento.
-- `source` (varchar(64), null) – 
+- `source` (varchar(64), null) –
 
-**Indices**
+**Índices**
 - `ux_behavior_events_tenant_event_id` on (`tenant_id`, `event_id`) UNIQUE – dedupe de eventos reintentados.
 - `ix_behavior_events_tenant_student_occurred` on (`tenant_id`, `student_id`, `occurred_at`) – timeline por estudiante.
 - `ix_behavior_events_tenant_occurred` on (`tenant_id`, `occurred_at`) – exploración temporal por tenant.
@@ -195,16 +198,16 @@ Esto evita duplicados cuando adapters o workers reintentan la publicación del m
 - `risk_level` (enum: LOW, MEDIUM, HIGH).
 - `flags` (jsonb, ej. ["AT_RISK", "HIGH_POTENTIAL"]).
 - `last_activity_at` (timestamptz).
-- `features_snapshot` (jsonb, opcional, subconjunto de features usados para el calculo).
-- `explanation` (jsonb, opcional, minimas razones/importancia para el perfil actual).
+- `features_snapshot` (jsonb, opcional, subconjunto de features usados para el cálculo).
+- `explanation` (jsonb, opcional, mínimas razones/importancia para el perfil actual).
 
-**Indices**
+**Índices**
 - `ux_behavior_profiles_tenant_student` (`tenant_id`, `student_id`) UNIQUE – 1 snapshot online por estudiante.
 - `idx_behavior_profiles_tenant_risk_level` (`tenant_id`, `risk_level`) – dashboards y alertas.
 
 Esta tabla es la fuente de verdad del comportamiento online: 1 fila por (`tenant_id`, `student_id`) para servir lecturas rápidas. Para análisis histórico por periodo se usa una tabla `behavior_profiles_history` (o analítica offline sobre `behavior_events`), con índice (`tenant_id`, `student_id`, `period_id`) y particionado por `period_id` o año. Esto evita escanear millones de `behavior_events` en el read path y permite cumplir el SLA de latencia para “perfil + nota consolidada”. Es el punto natural para scoring basado en reglas via `explanation` y `features_snapshot`.
 
-### Partitioning & retention
+### Particionamiento y retención
 
 - Tablas de alto volumen: `behavior_events`, `behavior_profiles_history`, `audit_logs`.
 - Particionado principal por tiempo o periodo (`occurred_at` / `period_id`); en escenarios extremos, sub‑particionar por `tenant_id`.
@@ -223,7 +226,7 @@ Esta tabla es la fuente de verdad del comportamiento online: 1 fila por (`tenant
 - `started_at` (timestamptz, null).
 - `completed_at` (timestamptz, null).
 
-**Indices** 
+**Índices**
 - `ix_gov_sync_jobs_tenant_status_scheduled` on (`tenant_id`, `status`, `scheduled_at`) – scheduler y monitoreo.
 
 ### gov_sync_results
@@ -240,12 +243,12 @@ Esta tabla es la fuente de verdad del comportamiento online: 1 fila por (`tenant
 - `idempotency_key` (varchar(128), not null).
 - `error_code` (varchar(64), null).
 - `error_message` (text, null).
-- `raw_request` (jsonb, null auditoria o sla).
-- `raw_response` (jsonb, null auditoria o sla).
+- `raw_request` (jsonb, null; auditoría o SLA).
+- `raw_response` (jsonb, null; auditoría o SLA).
 - `synced_at` (timestamptz, null).
 - `next_retry_at` (timestamptz, null) – cuándo este registro es elegible para reintento (backoff).
 
-**Indices**
+**Índices**
 - `ux_gov_sync_results_tenant_idempotency` (`tenant_id`, `idempotency_key`) UNIQUE – reintentos seguros sin duplicar envíos.
 - `ix_gov_sync_results_job_status` on (`job_id`, `status`) – avance del job.
 
@@ -255,7 +258,7 @@ Los estados se alinean con el flujo de sincronización del sistema (incluye fall
 ### audit_logs
 
 **Columnas**
-- `id` (uuid, PK) – identificador de auditoria.
+- `id` (uuid, PK) – identificador de auditoría.
 - `tenant_id` (uuid, FK -> tenants.id, not null).
 - `actor_id` (uuid, FK -> users.id, not null).
 - `action` (varchar(128), not null).
@@ -264,8 +267,8 @@ Los estados se alinean con el flujo de sincronización del sistema (incluye fall
 - `metadata` (jsonb, null).
 - `ip_address` (inet, null).
 
-**Indices**
-- `ix_audit_logs_tenant_actor` on (`tenant_id`, `actor_id`, `created_at`) – investigaciones y linea de tiempo .
+**Índices**
+- `ix_audit_logs_tenant_actor` on (`tenant_id`, `actor_id`, `created_at`) – investigaciones y línea de tiempo.
 - `ix_audit_logs_tenant_resource` on (`tenant_id`, `resource_type`, `resource_id`) – trazabilidad por entidad.
 - `ix_audit_logs_tenant_action_time` on (`tenant_id`, `action`, `occurred_at`) – monitoreo de acciones.
 
@@ -275,9 +278,9 @@ Evitar PII cruda en `audit_logs`: minimizar payload y, cuando aplique, hashear i
 ## Consideraciones Multi-tenant
 
 - Todas las tablas de negocio incluyen `tenant_id` con FK a `tenants.id`.
-- Toda consulta critica debe filtrar por `tenant_id` para evitar fugas de datos.
-- Evolucion futura: esquema por tenant o RLS en Postgres.
-- Este modelo logico es compatible con ambas estrategias.
+- Toda consulta crítica debe filtrar por `tenant_id` para evitar fugas de datos.
+- Evolución futura: esquema por tenant o RLS en Postgres.
+- Este modelo lógico es compatible con ambas estrategias.
 
 
 ### Multi-tenancy y aislamiento de datos
@@ -313,3 +316,5 @@ flowchart LR
     T --> S2[(tenant_school_456)]
   end
 ```
+
+<<<captura de pantalla del diagrama de multi-tenancy (MVP vs futuro) (render de Mermaid)>>> 

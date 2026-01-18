@@ -76,7 +76,7 @@ export class AuthService {
     const userId = user.id;
     const timestamp = Math.floor(Date.now() / 1000);
 
-    const token = `DEV.v1.Tenant${tenantId}.${userId}.${role}.${timestamp}`;
+    const token = `DEV.v1.Tenant.${tenantId}.${userId}.${role}.${timestamp}`;
 
     return {
       token,

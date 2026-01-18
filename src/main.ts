@@ -32,8 +32,10 @@ async function bootstrap() {
     next();
   });
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('Zendly API')
-    .setDescription('Zendly API description')
+    .setTitle('Luca API')
+    .setDescription(
+      'Luca technical assessment API (multi-tenant, gov-sync MVP, behavior/grades read models)',
+    )
     .addBearerAuth(
       {
         name: 'Authorization',

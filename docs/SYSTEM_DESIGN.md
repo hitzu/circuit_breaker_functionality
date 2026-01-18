@@ -1,21 +1,21 @@
 # Diseño del Sistema para Luca
 
-## 1) Overview
+## 1) Visión general (Overview)
 
 Sistema distribuido multi-tenant para gestionar evaluaciones académicas, sincronización trimestral con una API gubernamental y perfiles de comportamiento estudiantil. 
 
-### 1.1) Requisitos clave: 
-- Lectura 1:1 con p95 < 120ms y p99 < 250ms, 
-- Aislamiento por tenant sin fugas de datos, auditoría completa
-- Sincronización gubernamental en < 48h para todos los tenants.
+### 1.1) Requisitos clave
+- Lectura 1:1 con p95 < 120ms y p99 < 250ms
+- Aislamiento multi-tenant sin fugas de datos + auditoría completa
+- Sincronización gubernamental en < 48h para todos los tenants
 
-## 2) Arquitectura a alto nivel
+## 2) Arquitectura de alto nivel
 
 Componentes principales:
 - API y servicios de dominio (calificaciones, perfil de comportamiento).
 - Workers y scheduler para sincronización gubernamental y jobs batch.
-- Postgres como fuente de verdad para core y modelos de lectura.
-- Capa de eventos/colas para ingestión y procesamientos asíncronos.
+- Postgres como fuente de verdad para el core y los modelos de lectura.
+- Capa de eventos/colas para ingesta y procesamientos asíncronos.
 - Servicio de autenticación/RBAC.
 
 ```mermaid
@@ -60,21 +60,23 @@ flowchart LR
   S --> PG
 ```
 
-At a glance:
-- **Write path**: teachers send evaluations/activities → write API → event bus / DB → async computation of consolidated_grades and behavior_profiles.
-- **Read path**: clients request a student snapshot → read API → behavior_profiles + consolidated_grades (with cache) to meet p95/p99 latencies.
-- **Sync path**: a scheduler creates gov_sync_jobs per tenant+period → workers call the government API with idempotent requests and record results in gov_sync_results.
+<<<captura de pantalla del diagrama de arquitectura (render de Mermaid)>>> 
 
-## 3) Modelo de datos & multi-tenants
+Resumen (at a glance):
+- **Write path**: docentes envían evaluaciones/actividades → write API → event bus / DB → cómputo asíncrono de `consolidated_grades` y `behavior_profiles`.
+- **Read path**: clientes piden el snapshot de un estudiante → read API → `behavior_profiles` + `consolidated_grades` (con cache) para cumplir p95/p99.
+- **Sync path**: un scheduler crea `gov_sync_jobs` por tenant+periodo → workers llaman al API gubernamental con requests idempotentes y registran resultados en `gov_sync_results`.
+
+## 3) Modelo de datos y multi-tenant
 
 El detalle del modelo lógico, relaciones clave y estrategia multi-tenant vive en [DATA_MODEL_DESIGN.md](./DATA_MODEL_DESIGN.md).
 
-## 4) Leyendo perfil + nota consolidada (Enfoque en latencia)
+## 4) Lectura de perfil + nota consolidada (enfoque en latencia)
 
 Modelo de lectura:
 - `consolidated_grades` precomputado por `(tenant_id, student_id, period)`.
 - `behavior_profiles` precomputado por `(tenant_id, student_id)`.
-Nota: ver [`data_model_design.md#behavior_profiles`](./data_model_design.md#behavior_profiles) para el detalle del read model de comportamiento.
+Nota: ver [`DATA_MODEL_DESIGN.md#behavior_profiles`](./DATA_MODEL_DESIGN.md#behavior_profiles) para el detalle del modelo de lectura de comportamiento.
 
 ```mermaid
 sequenceDiagram
@@ -96,12 +98,14 @@ sequenceDiagram
   API-->>C: respuesta < 120ms p95
 ```
 
-Estrategia de latencia: primera estrategia con tabla precomputada, generación de índices compuestos `(tenant_id, student_id)` y protección con cache con TTL (in-memory hoy, intercambiable por Redis).
+<<<captura de pantalla del diagrama de secuencia de lectura (render de Mermaid)>>> 
+
+Estrategia de latencia: tabla precomputada, índices compuestos `(tenant_id, student_id)` y protección con cache con TTL (in-memory hoy, intercambiable por Redis).
 
 #### 4.1) Anti-stampede (single-flight por alumno/periodo)
 - Cache key: `(tenant_id, student_id, period_id)`.
-- Si múltiples requests llegan a la vez y el cache está vacío, **solo un request** ejecuta los queries; los demás esperan el mismo resultado.
-- Esto evita thundering herd sobre Postgres y mantiene p95/p99 estables en bursts de lectura.
+- Si múltiples requests llegan a la vez y el cache está vacío, **solo una request** ejecuta los queries; las demás esperan el mismo resultado.
+- Esto evita el thundering herd sobre Postgres y mantiene p95/p99 estables en bursts de lectura.
 
 Nota: el read path solo sirve desde `behavior_profiles` (snapshot online) + `consolidated_grades`. No se consulta `behavior_events` en línea para no degradar la latencia.
 
@@ -109,7 +113,7 @@ Nota: el read path solo sirve desde `behavior_profiles` (snapshot online) + `con
 
 #### Objetivo del pipeline
 
-Buscamos absorber eventos de múltiples orígenes (LMS interno, disciplina escolar, imports históricos) sin impactar la latencia de lectura. El objetivo es unificar todo en un canonical event consistente y persistir el histórico completo para auditoría y re-procesamiento.
+Buscamos absorber eventos de múltiples orígenes (LMS interno, disciplina escolar, imports históricos) sin impactar la latencia de lectura. El objetivo es unificar todo en un **evento canónico** consistente y persistir el histórico completo para auditoría y reprocesamiento.
 
 #### Fuentes de datos y “adapters” de entrada
 
@@ -118,7 +122,7 @@ Fuentes típicas:
 - Sistemas externos de la escuela (ausencias, reportes disciplinarios, reconocimientos).
 - Imports batch históricos (CSV/JSON).
 
-Cada fuente entra por un adapter dedicado (HTTP endpoint o job de import) para aislar formatos y ritmos:
+Cada fuente entra por un adapter dedicado (endpoint HTTP o job de import) para aislar formatos y ritmos:
 - `/api/events/platform`, `/api/events/lms`, `/api/events/discipline`, `/api/events/import`.
 
 En estos adapters:
@@ -129,7 +133,7 @@ En estos adapters:
 
 #### Normalización a un evento canónico (ETL ligera)
 
-Todos los eventos se convierten a un canonical event con un esquema estable, para facilitar downstream processing y consistencia cross-tenant:
+Todos los eventos se convierten a un evento canónico con un esquema estable, para facilitar el procesamiento downstream y mantener consistencia cross-tenant:
 
 ```json
 {
@@ -163,7 +167,7 @@ El cálculo del perfil se orquesta como un pipeline tipo Step Function o equival
 - **Aggregation**: ventanas móviles (7/30/90 días) y scores.
 - **Profile materialization**: actualización incremental en `behavior_profiles`.
 
-El resultado es un read model optimizado por `(tenant_id, student_id)` que sirve respuestas de baja latencia.
+El resultado es un modelo de lectura optimizado por `(tenant_id, student_id)` que sirve respuestas de baja latencia.
 
 ```mermaid
 flowchart LR
@@ -198,29 +202,29 @@ flowchart LR
   W --> FE --> AG --> PM --> BP
 ```
 
-### 5.1) Picos altos de eventos (absorcion sin caida)
+### 5.1) Picos altos de eventos (absorción sin caída)
 
-**Objetivo** Soportar picos de ingesta de eventos del pipeline de comportamiento sin degradar la lectura de perfiles ni la operacion core
+**Objetivo**: soportar picos de ingesta de eventos del pipeline de comportamiento sin degradar la lectura de perfiles ni la operación core.
 
 Estrategia:
 - **Buffer asíncrono (cola/event bus)**
   - `POST /api/events`:
     - Valida lo mínimo (tenant, student, tipo de evento).
-    - Publica el evento en 'Q' (cola/event bus) y responde rapido (200)
-    - La persistencia y el cálculo de agregados se mueven a un worker desacoplado
+    - Publica el evento en `Q` (cola/event bus) y responde rápido (200).
+    - La persistencia y el cálculo de agregados se mueven a un worker desacoplado.
 - **Workers y back-pressure controlado**
-  - Workers leen de 'Q' en lotes (batch size configurable)
-    - Escriben en `behavior_events` y actualizan `behavior_profiles` de forma incremental
-    - Se puede escalar horizontalmente el número de workers desde alguna variable de entorno segun:
+  - Workers leen de `Q` en lotes (batch size configurable)
+    - Escriben en `behavior_events` y actualizan `behavior_profiles` de forma incremental.
+    - Se puede escalar horizontalmente el número de workers desde alguna variable de entorno según:
       - profundidad de la cola,
       - lag de procesamiento,
       - ventanas de horario escolar.
 - **Degradación funcional controlada**
   - Durante picos muy altos:
     - Solo se actualizan señales rápidas.
-    - Features pesadas (modelos ML, agregados complejos) se mandan a un batch nocturno
+    - Features pesadas (modelos ML, agregados complejos) se mandan a un batch nocturno.
 
-## 6) Sincronización trimestral con el API del gobierno 
+## 6) Sincronización trimestral con el API del gobierno
 
 Objetivo: enviar, cada trimestre y por tenant, un snapshot de notas consolidadas al API gubernamental garantizando:
 
@@ -231,7 +235,7 @@ Objetivo: enviar, cada trimestre y por tenant, un snapshot de notas consolidadas
 
 ### 6.1 Modelo de jobs y batches
 
-Usamos dos tablas principales (ver [`data_model_design.md`](./data_model_design.md)):
+Usamos dos tablas principales (ver [`DATA_MODEL_DESIGN.md`](./DATA_MODEL_DESIGN.md)):
 
 - `gov_sync_jobs`: describe un job trimestral por `tenant_id + period`.
 - `gov_sync_results`: un registro por alumno enviado en ese job (incluye idempotency key y raw request/response).
@@ -263,6 +267,8 @@ sequenceDiagram
     W->>DB: marcar registros en DLQ
   end
 ```
+
+<<<captura de pantalla del flujo de sincronización (render de Mermaid)>>> 
 
 **Batching**: cada mensaje de cola contiene un conjunto de alumnos (ej. 100) para minimizar overhead pero mantener granularidad.
 
@@ -349,6 +355,8 @@ sequenceDiagram
     end
 ```
 
+<<<captura de pantalla del diagrama de circuit breaker (render de Mermaid)>>> 
+
 
 Política del breaker (ejemplo):
 
@@ -389,7 +397,7 @@ Esto deja amplio margen para **retries, backoff, rate limiting** y ventanas degr
 - Mock de gobierno: `POST /api/_mock/government/grades` (modo `ok` | `fail` | `flaky`).
 - `GovApiClient` implementa retries con backoff y circuit breaker (CLOSED/OPEN/HALF_OPEN).
 
-## 7) Multi-tenant security, RBAC, PII & Audit
+## 7) Seguridad multi-tenant, RBAC, PII y auditoría
 
 ### 7.1 Modelo multi-tenant y roles
 
@@ -479,6 +487,8 @@ export class TenantRoleGuard implements CanActivate {
 - “Admin” is per-tenant, not a global superuser.
 - These roles are examples; we can refine or expand as product needs evolve.
 
+<<<captura de pantalla de la matriz RBAC renderizada en Markdown>>> 
+
 **En el diseño**:
 
 Todos los “read models” (consolidated_grades, behavior_profiles, etc.) se consultan siempre filtrando por (tenant_id, ...).
@@ -549,22 +559,22 @@ No asi:
 logger.info({ tenantId, studentName: 'Juan Pérez' }, 'Loaded snapshot');
 ```
 
-### Privacy & PII at storage level
+### Privacidad y PII a nivel de almacenamiento
 
 Clasificación de datos (alto nivel):
 - **Identificadores directos**: `student_id`, `external_id` gubernamental, emails (si aplica).
 - **Cuasi-identificadores**: escuela, clase, grado, año de nacimiento, cohortes.
 - **Datos académicos/sensibles**: calificaciones, eventos de comportamiento, features y señales de riesgo.
-- **Meta-datos del sistema**: estado de jobs, auditoría, métricas y trazas operativas.
+- **Metadatos del sistema**: estado de jobs, auditoría, métricas y trazas operativas.
 
 Reglas de almacenamiento:
-- **No raw PII en logs o trazas**; usar IDs internos o hashes.
+- **No PII cruda en logs o trazas**; usar IDs internos o hashes.
 - **Encriptación en reposo** en DB y storage (claves administradas por KMS).
 - **Encriptación en tránsito** (TLS) para APIs y conexiones a DB.
 - **Tenant scoping**: toda tabla de negocio incluye `tenant_id` y las queries siempre filtran por él.
 - **Retención y borrado**:
   - Datos académicos y de comportamiento retenidos por N años (configurable por tenant / regulación).
-  - Right-to-be-forgotten: al borrar un estudiante, se eliminan/anomimizan identificadores directos y los eventos/perfiles se anonimizan o purgan según política.
+- Right-to-be-forgotten: al borrar un estudiante, se eliminan/anonimizan identificadores directos y los eventos/perfiles se anonimizan o purgan según política.
 ### 7.4 Auditoría (audit_logs)
 
 La tabla audit_logs permite responder: “¿quién hizo qué, cuándo y sobre qué recurso?” sin depender de logs de aplicación.
@@ -609,7 +619,7 @@ Retención y offboarding:
 - `audit_logs`: 5–7 años para trazabilidad.
 - Offboarding de tenant: borrado lógico por `tenant_id` + proceso batch de purga física y revocación de accesos.
 
-## 8) Observability
+## 8) Observabilidad
 
 Métricas:
 - p95/p99 en lecturas de perfil+nota.
@@ -625,7 +635,7 @@ Respuesta a incidentes:
 - Inspección de `gov_sync_results` + correlación con `audit_logs`.
 - Revisión de índices y cache hit rate en lecturas lentas.
 
-## 9) Failure modes & handling
+## 9) Modos de falla y manejo
 | Escenario | Detección | Acción |
 |---|---|---|
 | Gov API lenta/intermitente | p95/errores suben, breaker HALF/OPEN | Backoff + requeue con delay |

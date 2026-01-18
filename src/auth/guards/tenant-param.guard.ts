@@ -22,10 +22,7 @@ export class TenantParamGuard implements CanActivate {
       throw new ForbiddenException('tenantId param missing');
     }
 
-    const normalizedParam =
-      tenantId.startsWith('Tenant') ? tenantId : `Tenant${tenantId}`;
-
-    if (authUser.tenantId !== normalizedParam) {
+    if (authUser.tenantId !== tenantId) {
       throw new ForbiddenException('Tenant mismatch');
     }
 

@@ -6,11 +6,11 @@ const DEV_TOKEN_ROLES: AuthUserRole[] = ['ADMIN', 'PRINCIPAL', 'TEACHER'];
 
 export function parseDevToken(rawToken: string): AuthUserContext {
   const parts = rawToken.split('.');
-  if (parts.length !== 6) {
+  if (parts.length !== 7) {
     throw new Error('Invalid dev token format');
   }
 
-  const [prefix, version, tenantId, userId, role, timestamp] = parts;
+  const [prefix, version, tenantWord, tenantId, userId, role, timestamp] = parts;
   if (prefix !== DEV_TOKEN_PREFIX || version !== DEV_TOKEN_VERSION) {
     throw new Error('Invalid dev token prefix or version');
   }
