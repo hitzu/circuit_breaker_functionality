@@ -7,10 +7,10 @@ import { AppService } from './app.service';
 import { getTypeOrmConfig } from './config/database';
 import { LoggerModule } from 'nestjs-pino';
 import { getLoggerConfigs } from './config/logger/logger.config';
+import { DevTokenGuard } from './auth/guards/dev-token.guard';
+import { TenantsModule } from './tenants/tenants.module';
 import { AuthModule } from './auth/auth.module';
-import { UserModule } from './user/user.module';
-import { TokenModule } from './token/token.module';
-import { AuthGuard } from './auth/auth.guard';
+import { TokenModule } from './tokens/token.module';
 
 @Module({
   imports: [
@@ -26,8 +26,8 @@ import { AuthGuard } from './auth/auth.guard';
     TypeOrmModule.forRootAsync({
       useFactory: () => getTypeOrmConfig(),
     }),
+    TenantsModule,
     AuthModule,
-    UserModule,
     TokenModule,
   ],
   controllers: [AppController],
@@ -35,8 +35,8 @@ import { AuthGuard } from './auth/auth.guard';
     AppService,
     {
       provide: APP_GUARD,
-      useClass: AuthGuard,
+      useClass: DevTokenGuard,
     },
   ],
 })
-export class AppModule {}
+export class AppModule { }

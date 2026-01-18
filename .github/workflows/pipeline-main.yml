@@ -27,7 +27,7 @@ jobs:
       DB_PORT: 5432
       DB_USERNAME: postgres
       DB_PASSWORD: postgres
-      DB_NAME: bookandsign_test
+      DB_NAME: luca_test
       JWT_SECRET: ${{ secrets.JWT_SECRET }}
     services:
       postgres:
@@ -35,7 +35,7 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: bookandsign_test
+          POSTGRES_DB: luca_test
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -85,7 +85,8 @@ jobs:
     env:
       NODE_VERSION: 22
       PNPM_VERSION: 9
-      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      DB_URL: ${{ secrets.DB_URL }}
+      DB_SCHEMA: ${{ secrets.DB_SCHEMA }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -108,40 +109,12 @@ jobs:
       - name: Build
         run: pnpm run build
 
-      - name: Debug - Check SUPABASE_DB_URL
-        env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-        run: |
-          if [ -z "$SUPABASE_DB_URL" ]; then
-            echo "SUPABASE_DB_URL is EMPTY or NOT SET"
-            echo ""
-            echo "TROUBLESHOOTING:"
-            echo "1. Verify the secret 'SUPABASE_DB_URL' exists in the 'production' environment"
-            echo "2. Go to: Settings > Environments > production > Secrets and variables"
-            echo "3. Make sure 'SUPABASE_DB_URL' is added as a secret (not a variable)"
-            echo "4. If using repository secrets instead, remove 'environment: production' from the job"
-            exit 1
-          else
-            echo "SUPABASE_DB_URL is SET"
-          fi
-
-      - name: migrations:status (before)
-        env:
-          NODE_ENV: production
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-        run: pnpm run db:status
-
       - name: migrations:run
         env:
           NODE_ENV: production
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          DB_URL: ${{ secrets.DB_URL }}
+          DB_SCHEMA: ${{ secrets.DB_SCHEMA }}
         run: pnpm run db:run
-
-      - name: migrations:status (after)
-        env:
-          NODE_ENV: production
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-        run: pnpm run db:status
 
   deploy:
     name: deploy

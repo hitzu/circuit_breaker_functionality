@@ -1,98 +1,245 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Inbox & Allocation Service
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+## Overview
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+This project is a backend service that provides **inbox and allocation capabilities for operators** in a **multi-tenant** environment.
 
-## Description
+It is intentionally focused on **metadata only**:
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+- It **does not handle**:
+  - contact management,
+  - authentication/login,
+  - message history storage,
+  - message delivery to external channels.
+- Those responsibilities belong to an external **orchestrator** service.
 
-## Project setup
+Instead, this backend answers questions like:
+
+- Which tenant and inbox does this conversation belong to?
+- What is the current **state** of the conversation (QUEUED / ALLOCATED / RESOLVED)?
+- Which **operator** is responsible for it?
+- Which **labels** (business tags) are attached to the conversation?
+- Is the operator **AVAILABLE** or **OFFLINE**?
+- What happens to their conversations when they go offline (grace period and re-queueing)?
+- What is the next conversation that should be auto-allocated based on priority?
+
+The service exposes a clean API for agent UIs, supervisor consoles and automation tools to:
+
+- list and filter conversations,
+- allocate/claim/resolve/reassign work,
+- manage inboxes and labels,
+- track operator status and apply grace periods,
+- search conversations by id, phone number, inbox and operator.
+
+---
+
+## Tech Stack
+
+- **Runtime / Framework**: [NestJS](https://nestjs.com/)
+- **Database**: PostgreSQL
+- **ORM / Persistence**: TypeORM
+- **Package manager**: `pnpm`
+- **API documentation**: Swagger (OpenAPI) exposed via `/api`
+- **Testing**: Jest
+- **CI/CD**: GitHub Actions
+
+---
+
+## Production URL
+
+Live deployment: https://zendly-tech-test.onrender.com
+
+---
+
+## Running the project locally
+
+### Prerequisites
+
+- Docker & Docker Compose
+- Node.js (compatible with Nest)
+- `pnpm` installed globally
+
+### Steps
+
+1. **Start the database with Docker Compose**
 
 ```bash
-$ pnpm install
+docker compose up -d
 ```
 
-## Compile and run the project
+This will bring up the PostgreSQL instance (and any other dependent services defined in docker-compose.yml).
+
+2. Install dependencies
 
 ```bash
-# development
-$ pnpm run start
-
-# watch mode
-$ pnpm run start:dev
-
-# production mode
-$ pnpm run start:prod
+pnpm install
 ```
 
-## Run tests
+3. Run database migrations
 
 ```bash
-# unit tests
-$ pnpm run test
-
-# e2e tests
-$ pnpm run test:e2e
-
-# test coverage
-$ pnpm run test:cov
+pnpm run db:run
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+4. Start the NestJS application
 
 ```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
+pnpm run start:dev
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+5. Access API documentation (Swagger)
 
-## Resources
+Once the app is running, open:
 
-Check out a few resources that may come in handy when working with NestJS:
+Swagger UI: https://zendly-tech-test.onrender.com/api
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+(Replace <PORT> with the configured HTTP port, typically 3000.)
 
-## Support
+---
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+## Functional overview
 
-## Stay in touch
+At a high level, the service implements the domain described in the “Backend requirements for Inbox and Allocation system” document and exposes the capabilities below.
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+## Documentation
 
-## License
+The following documents provide more detailed information about this service:
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+- [Architecture](./ARCHITECTURE.md) – Domain model, ERD, and main flows.
+- [Design Decisions](./DESIGN_DECISIONS.md) – How the original spec was interpreted and implemented.
+- [API Reference](./API.md) – Detailed list of endpoints, parameters, and responses.
+- [Testing](./TESTING.md) – Manual and automated testing strategy and flow coverage.
+
+### Multi-tenant model
+
+- Every resource is scoped by `tenantId`.
+- Operator: belongs to a tenant and has one role (`OPERATOR`, `MANAGER`, or `ADMIN`).
+- Inbox: belongs to a tenant and has a unique `phone_number` per tenant (one number maps to one inbox).
+- Operator–Inbox subscriptions: define which inboxes an operator can work on and therefore which conversations they can see/allocate.
+
+### Conversations & lifecycle
+
+- `ConversationRef` stores: `tenant_id`, `inbox_id`, `external_conversation_id` (orchestrator), `customer_phone_number`, `state` (`QUEUED` | `ALLOCATED` | `RESOLVED`), `assigned_operator_id` (nullable), `last_message_at`, `message_count`, `priority_score`, timestamps (`created_at`, `updated_at`, `resolved_at`).
+- Each conversation belongs to exactly one inbox.
+- Lifecycle transitions:
+  - `QUEUED` → `ALLOCATED` via auto allocation or manual claim.
+  - `ALLOCATED` → `RESOLVED` via resolve.
+  - `ALLOCATED` → `QUEUED` via deallocation or grace-period expiration.
+
+### Allocation modes
+
+- Auto allocation (`POST /allocation/allocate`)
+  1. Validate operator role, status, and subscriptions.
+  2. Build QUEUED candidates from subscribed inboxes (most recent 100).
+  3. Compute `priority_score` (weighted message count + delay) and sort by priority then `last_message_at`.
+  4. Lock the top conversation, set state to `ALLOCATED`, assign operator, return the record.
+- Manual claim (`POST /allocation/claim`)
+  - Operator picks a specific QUEUED conversation; service attempts to lock/assign and returns the updated record or a safe failure if already taken.
+- Other allocation actions
+  - `POST /allocation/resolve`: `ALLOCATED` → `RESOLVED` (owners/managers/admins).
+  - `POST /allocation/deallocate`: `ALLOCATED` → `QUEUED` and clear `assigned_operator_id`.
+  - `POST /allocation/reassign`: move `assigned_operator_id` between operators in the same tenant.
+  - `POST /allocation/move-inbox`: move a conversation to another inbox within the same tenant with controlled state handling.
+
+### Labels & tagging
+
+- `Label`: defined per tenant and inbox; fields include `name`, optional `color`, `created_by`, `created_at`.
+- `ConversationLabel`: many-to-many between conversations and labels to tag items (e.g., vip, fraud, billing, complaint).
+- API supports CRUD on labels plus attach/detach labels to/from conversations.
+
+### Operator status & grace period
+
+- `OperatorStatus` tracks whether an operator is `AVAILABLE` or `OFFLINE` and updates `last_status_change_at`.
+- `GracePeriodAssignment`: when an operator goes `OFFLINE`, create grace assignments for their `ALLOCATED` conversations.
+  - A scheduled job/endpoint checks expirations.
+  - If expired and operator still offline → conversation returns to `QUEUED`.
+  - If operator becomes `AVAILABLE` before expiry → pending grace rows are removed and conversations stay `ALLOCATED`.
+  - Prevents conversations from being dropped instantly while also avoiding them getting stuck.
+
+### Search & conversation listing
+
+- Search by phone number: exact match on `customer_phone_number`, ordered by most recent activity.
+- Conversation listing (`GET /conversations`):
+  - Filters: `inboxId`, `state` (`QUEUED` | `ALLOCATED` | `RESOLVED`), `assignedOperatorId`, `customerPhoneNumber` (exact match).
+  - Sorting: newest, oldest, or priority.
+  - Pagination: hard cap (e.g., last 100) for performance and polling efficiency.
+
+user flow
+
+```mermaid
+flowchart TD
+
+A[Customer sends WhatsApp/SMS message] --> B[Orchestrator receives message]
+
+B --> C[Orchestrator finds or creates conversation_id]
+
+C --> D[Orchestrator calls Inbox/Allocation Backend<br/>to upsert ConversationRef in QUEUED]
+
+D --> E[ConversationRef stored with state=QUEUED<br/>and priority_score calculated]
+
+subgraph Operator Side
+
+  F[Operator logs in via Auth Service<br/>Separate system]
+
+  F --> G[Operator UI requests /inboxes and /conversations?state=QUEUED]
+
+  G --> H[Operator presses Get next conversation]
+
+  G --> H2[Operator selects a specific queued conversation]
+
+  H --> I[POST /allocation/allocate with operator_id]
+
+  H2 --> I2[POST /allocation/claim with conversation_id]
+
+end
+
+I --> J[Backend validates operator role and status AVAILABLE]
+
+I2 --> J
+
+J --> K[Backend builds candidate list:<br/>QUEUED + subscribed inboxes + last 100]
+
+K --> L[Backend computes priority_score<br/>and sorts by priority + last_message_at]
+
+L --> M[Backend locks top conversation row]
+
+M --> N[Update state to ALLOCATED<br/>and set assigned_operator_id]
+
+N --> O[Return allocated conversation to UI]
+
+subgraph During Handling
+
+  O --> P[Operator sends replies via Orchestrator UI]
+
+  P --> Q[Orchestrator delivers messages to customer]
+
+end
+
+subgraph Resolve Path
+
+  R[Operator clicks Resolve] --> S[POST /allocation/resolve]
+
+  S --> T[Backend checks permissions:<br/>owner or MANAGER/ADMIN]
+
+  T --> U[Update state to RESOLVED and set resolved_at]
+
+  U --> V[Emit event to Orchestrator if needed]
+
+end
+
+subgraph Deallocation / Grace
+
+  W[Operator goes OFFLINE] --> X[POST /operator-status OFFLINE]
+
+  X --> Y[Create GracePeriodAssignment rows<br/>for all ALLOCATED conversations]
+
+  Y --> Z[Background job periodically checks expirations]
+
+  Z --> ZA{Grace expired<br/>and operator still OFFLINE?}
+
+  ZA -->|Yes| ZB[Move ALLOCATED back to QUEUED]
+
+  ZA -->|No operator AVAILABLE| ZC[Delete grace rows and keep ALLOCATED]
+
+end
+```

@@ -3,4 +3,3 @@ export enum USER_ROLES {
   PRINCIPAL = 'PRINCIPAL',
   ADMIN = 'ADMIN',
 }
-

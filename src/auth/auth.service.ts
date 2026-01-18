@@ -1,71 +1,92 @@
-import {
-  Injectable,
-  ConflictException,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
-import { UserService } from '../user/user.service';
-import { SignupDto } from '../user/dto/signup.dto';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { EXCEPTION_RESPONSE } from 'src/config/errors/exception-response.config';
-import { Logger } from '@nestjs/common';
 import { LoginDto } from './dto/login.dto';
-import { LoginOutputDto, UserInfo } from './dto/login-output.dto';
-import { TokenService } from '../token/token.service';
-import { plainToInstance } from 'class-transformer';
+import { UsersService } from '../users/users.service';
+import { DevLoginResponseDto } from './dto/dev-login-response.dto';
+import type { DevTokenRole } from './guards/dev-token.guard';
+import { USER_ROLES } from '../common/types/user-roles.type';
+import { TokenService } from '../tokens/token.service';
+import type { User } from '../users/entities/user.entity';
+import { CreateUserDto } from '../users/dto/create-user.dto';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+
+  // Dev-only auth service. Do not use this implementation in production.
   constructor(
-    private readonly userService: UserService,
-    private readonly tokenService: TokenService,
-  ) {}
+    private readonly usersService: UsersService,
+  ) { }
 
-  public async signup(signupDto: SignupDto): Promise<LoginOutputDto> {
-    try {
-      const { email } = signupDto;
-      const existingUser = await this.userService.findUserByEmail(email);
-      if (existingUser)
-        throw new ConflictException(EXCEPTION_RESPONSE.SIGNUP_EMAIL_IN_USE);
-      const user = await this.userService.createNewUser(signupDto);
-      const tokens = await this.tokenService.generateAuthTokens(user);
-
-      return {
-        accessAndRefreshToken: tokens,
-        userInfo: plainToInstance(UserInfo, user, {
-          excludeExtraneousValues: true,
-        }),
-      };
-    } catch (error) {
-      this.logger.error(error, 'Error signing up');
-      throw error;
-    }
+  public async signup(
+    createUserDto: CreateUserDto,
+  ): Promise<DevLoginResponseDto> {
+    const user = await this.usersService.createUser(createUserDto);
+    return this.buildDevLoginResponse(user);
   }
 
-  public async login(loginDto: LoginDto): Promise<LoginOutputDto> {
-    try {
-      const { email, password } = loginDto;
-      const user = await this.userService.findUserByEmail(email);
-      if (!user) {
-        throw new NotFoundException(EXCEPTION_RESPONSE.USER_NOT_FOUND);
-      }
-      if (!(await user.comparePassword(password))) {
-        throw new UnauthorizedException(
-          EXCEPTION_RESPONSE.LOGIN_BAD_CREDENTIAL,
-        );
-      }
+  public async login(loginDto: LoginDto): Promise<DevLoginResponseDto> {
+    const { userId } = loginDto;
+    this.logger.log({ userId }, 'Dev login requested (test-only)');
 
-      const tokens = await this.tokenService.generateAuthTokens(user);
+    const user = userId
+      ? await this.usersService.getUserById(userId)
+      : await this.pickRandomUser();
 
-      return {
-        accessAndRefreshToken: tokens,
-        userInfo: plainToInstance(UserInfo, user, {
-          excludeExtraneousValues: true,
-        }),
-      };
-    } catch (error) {
-      this.logger.error(error, 'Error logging in');
-      throw error;
-    }
+    const response = this.buildDevLoginResponse(user);
+
+    this.logger.log(
+      {
+        requestedUserId: userId,
+        chosenUserId: response.userId,
+      },
+      'Dev login completed',
+    );
+
+    return response;
   }
+
+  private async pickRandomUser(): Promise<User> {
+    const users = await this.usersService.findAllUsers();
+    if (!users.length) {
+      this.logger.error('No users available for dev login');
+      throw new NotFoundException(EXCEPTION_RESPONSE.USER_NOT_FOUND);
+    }
+
+    const randomIndex = Math.floor(Math.random() * users.length);
+    return users[randomIndex];
+  }
+
+  private buildDevLoginResponse(user: User): DevLoginResponseDto {
+    const role = this.mapUserRoleToDevRole(user.role);
+    const tenantId = this.buildTenantId(user);
+    const userId = user.id;
+    const timestamp = Math.floor(Date.now() / 1000);
+
+    const token = `DEV.v1.${tenantId}.${userId}.${role}.${timestamp}`;
+
+    return {
+      token,
+      userId,
+      tenantId,
+      role,
+    };
+  }
+
+  private mapUserRoleToDevRole(userRole: USER_ROLES): DevTokenRole {
+    if (userRole === USER_ROLES.ADMIN) {
+      return 'ADMIN';
+    }
+
+    if (userRole === USER_ROLES.PRINCIPAL) {
+      return 'PRINCIPAL';
+    }
+
+    return 'TEACHER';
+  }
+
+  private buildTenantId(user: User): number {
+    return user.tenantId;
+  }
+
 }

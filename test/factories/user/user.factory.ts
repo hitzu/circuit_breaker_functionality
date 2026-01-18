@@ -1,11 +1,13 @@
 import type { FactorizedAttrs } from '@jorgebodega/typeorm-factory';
-import { DataSource } from 'typeorm';
 import { faker } from '@faker-js/faker';
 import { Factory } from '@jorgebodega/typeorm-factory';
-import { User } from '../../../src/user/entities/user.entity';
-import { USER_ROLES } from '../../../src/common/types/user-roles.type';
+import { DataSource } from 'typeorm';
 
-export class UserFactory extends Factory<User> {
+import { USER_ROLES } from '../../../src/common/types/user-roles.type';
+import { USER_STATUS } from '../../../src/common/types/user-status.type';
+import { User } from '../../../src/users/entities/user.entity';
+
+export class OperatorFactory extends Factory<User> {
   protected entity = User;
   protected dataSource: DataSource;
 
@@ -16,29 +18,25 @@ export class UserFactory extends Factory<User> {
 
   protected attrs(): FactorizedAttrs<User> {
     return {
-      role: faker.helpers.arrayElement<USER_ROLES>(Object.values(USER_ROLES)),
-      firstName: faker.person.firstName(),
-      lastName: faker.person.lastName(),
-      email: faker.internet.email(),
-      password: faker.internet.password({ length: 12 }),
-      phone: faker.phone.number(),
+      tenantId: faker.number.int({ min: 1, max: 10_000 }),
+      email: faker.internet.email({ provider: 'school.edu' }).toLowerCase(),
+      fullName: faker.person.fullName(),
+      role: faker.helpers.arrayElement<USER_ROLES>(
+        Object.values(USER_ROLES),
+      ),
+      status: USER_STATUS.ACTIVE,
+      scopes: null,
+      lastLoginAt: null,
     };
   }
 
-  /**
-   * Creates a user with a known password for testing authentication
-   */
-  async makeWithPassword(password: string): Promise<User> {
-    const user = await this.make();
-    await user.hashPassword(password);
-    return user;
-  }
-
-  /**
-   * Creates and persists a user with a known password
-   */
-  async createWithPassword(password: string): Promise<User> {
-    const user = await this.makeWithPassword(password);
-    return this.dataSource.getRepository(User).save(user);
+  async createForTenant(
+    tenantId: number,
+    overrides?: Partial<FactorizedAttrs<User>>,
+  ): Promise<User> {
+    return this.create({
+      tenantId,
+      ...overrides,
+    });
   }
 }

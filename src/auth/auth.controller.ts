@@ -1,47 +1,54 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
-import { AuthService } from './auth.service';
 import {
   ApiBadRequestResponse,
   ApiCreatedResponse,
+  ApiNotFoundResponse,
   ApiOkResponse,
+  ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
-import { SignupDto } from '../user/dto/signup.dto';
-import { LoginOutputDto } from './dto/login-output.dto';
-import { LoginDto } from './dto/login.dto';
-import { EXCEPTION_RESPONSE } from '../config/errors/exception-response.config';
-import { Public } from './decorators/public.decorator';
 
-@ApiTags('auth')
+import { AuthService } from './auth.service';
+import { DevLoginResponseDto } from './dto/dev-login-response.dto';
+import { LoginDto } from './dto/login.dto';
+import { Public } from './decorators/public.decorator';
+import { CreateUserDto } from '../users/dto/create-user.dto';
+
+@ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
+  // Dev-only signup helper to quickly seed operators in testing environments.
   @Public()
   @Post('signup')
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Dev signup for testing (NOT production ready)' })
   @ApiCreatedResponse({
-    description: 'User created successfully',
+    description: 'Operator created with a dev token',
+    type: DevLoginResponseDto,
   })
-  async signup(@Body() signupDto: SignupDto) {
-    try {
-      return this.authService.signup(signupDto);
-    } catch (error) {
-      console.log(error, 'Error signing up');
-      throw error;
-    }
+  async signup(
+    @Body() createUserDto: CreateUserDto,
+  ): Promise<DevLoginResponseDto> {
+    return this.authService.signup(createUserDto);
   }
 
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Dev login for testing (NOT real auth)' })
   @ApiOkResponse({
-    description: 'User logged in successfully',
+    description: 'Returns a dev token and operator info',
+    type: DevLoginResponseDto,
   })
   @ApiBadRequestResponse({
-    description: EXCEPTION_RESPONSE.LOGIN_BAD_CREDENTIAL.message,
+    description: 'Invalid request',
   })
-  async login(@Body() loginDto: LoginDto): Promise<LoginOutputDto> {
+  @ApiNotFoundResponse({
+    description: 'Operator not found or no operators available',
+  })
+  async login(@Body() loginDto: LoginDto): Promise<DevLoginResponseDto> {
     return this.authService.login(loginDto);
   }
 }
