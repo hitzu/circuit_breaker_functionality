@@ -1,4 +1,4 @@
-# Luca — Technical Assessment (Diseño + PoC opcional: Gov Sync resiliente)
+#(Diseño + PoC opcional: Gov Sync resiliente)
 
 Este repositorio contiene el entregable de diseño (arquitectura + decisiones + modelo de datos) y un el PoC opcional que demuestra resiliencia en la integración de Gov Sync (mock + circuit breaker por tenant).
 
